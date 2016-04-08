@@ -11,6 +11,8 @@ import oauth2client
 from oauth2client import client
 from oauth2client import tools
 
+from dateutil.parser import parse
+
 try:
     import argparse
     flags = argparse.ArgumentParser(parents=[tools.argparser]).parse_args()
@@ -69,37 +71,56 @@ def getFullMessageFromId(service, id):
 def markMessageAsRead(mId):
 	return
 	
-def printMessage(m):
-	headers = {}
+def parseMessage(m):
+	em = {}
 	for kv in m['payload']['headers']:
 		if kv['name']=='Date':
-			headers['date'] = kv['value']
+			em['date'] = kv['value']
 		if kv['name']=='Subject':
-			headers['subject'] = kv['value']
+			em['subject'] = kv['value']
 		if kv['name']=='From':
-			headers['from'] = kv['value']
+			em['from'] = kv['value']
 		if kv['name']=='To':
-			headers['to'] = kv['value']
+			em['to'] = kv['value']
 			
-	headers['labelIds'] = ",".join(m['labelIds'])
+	em['labelIds'] = ",".join(m['labelIds'])
 
+	if em.has_key('from'):
+		em['from_pretty'] = em['from'].split('<')[0].strip()
+	else:
+		em['from_pretty'] = ''
+		
+	if em.has_key('date'):
+		em['date_pretty'] = parse(em['date']).strftime('%A, %B %d %Y, %I:%M %p')
+	else:
+		em['date_pretty'] = ''
+	
 	for part in m['payload']['parts']:
 		if part['mimeType'] == 'text/plain':
 			e = part['body']['data']
 			d = base64.urlsafe_b64decode(e.encode('ASCII'))
-			headers['body'] = email.message_from_string(d).as_string()
+			em['body'] = email.message_from_string(d).as_string().strip()
 
-	for key in headers:
-		print(key + ' = ' + headers[key]);
-	#print('body: '+body)
-	
+	#for key in email:
+	#	print(key + ' = ' + email[key]);
+
+	return em
+		
+def printEmail(email):
+	print('From: '+email['from_pretty'])
+	print('On: '+email['date_pretty'])
+	print('Subject: '+email['subject'])
+	print(email['body'])
+
 def main():
 	service = getService()
 	ms = getUnreadMessages(service)
 
 	for m in ms:
 		f = getFullMessageFromId(service,m['id'])
-		printMessage(f)
+		email = parseMessage(f)
+		printEmail(email)
+		print()
 
     # results = service.users().labels().list(userId='me').execute()
     # labels = results.get('labels', [])
