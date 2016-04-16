@@ -22,10 +22,12 @@ except ImportError:
 # If modifying these scopes, delete your previously saved credentials
 # at ~/.credentials/gmail-python-quickstart.json
 #SCOPES = 'https://www.googleapis.com/auth/gmail.readonly'
-SCOPES = ['https://www.googleapis.com/auth/gmail.readonly','https://www.googleapis.com/auth/gmail.labels'
+SCOPES = ['https://www.googleapis.com/auth/gmail.readonly','https://www.googleapis.com/auth/gmail.modify']
 CLIENT_SECRET_FILE = 'client_secret.json'
 APPLICATION_NAME = 'botclient'
 
+service = 0
+PRINTED_LABELID = 'Label_1'
 
 def get_credentials():
     """Gets valid user credentials from storage.
@@ -61,6 +63,17 @@ def getService():
 	service = discovery.build('gmail', 'v1', http=http)
 	return service
 
+def printExistingLabels():
+	results = service.users().labels().list(userId='me').execute()
+	labels = results.get('labels', [])
+
+	if not labels:
+		print('No labels found.')
+	else:
+		print('Labels:')
+		for label in labels:
+			print(label['name']+ " "+label['id'])
+	
 def getUnreadMessages(service):
 	messages = service.users().messages().list(userId='me', labelIds=['UNREAD']).execute()
 	return messages.get('messages',[])
@@ -69,7 +82,9 @@ def getFullMessageFromId(service, id):
 	m = service.users().messages().get(userId='me', id=id).execute()
 	return m
 	
-def markMessageAsRead(mId):
+def markMessageAsReadAndPrinted(service, mId):
+	body = {'removeLabelIds': ['UNREAD'], 'addLabelIds': [PRINTED_LABELID]}
+	service.users().messages().modify(userId='me', id=mId, body=body).execute()
 	return
 	
 def parseMessage(m):
@@ -114,7 +129,10 @@ def printEmail(email):
 	print(email['body'])
 
 def main():
+	global service
 	service = getService()
+
+	#printExistingLabels()
 	ms = getUnreadMessages(service)
 
 	for m in ms:
@@ -122,17 +140,7 @@ def main():
 		email = parseMessage(f)
 		printEmail(email)
 		print()
-
-    # results = service.users().labels().list(userId='me').execute()
-    # labels = results.get('labels', [])
-
-    # if not labels:
-        # print('No labels found.')
-    # else:
-      # print('Labels:')
-      # for label in labels:
-        # print(label['name'])
-
+		#markMessageAsReadAndPrinted(service, m['id'])
 
 if __name__ == '__main__':
     main()
