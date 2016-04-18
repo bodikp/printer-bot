@@ -2,6 +2,8 @@ from __future__ import print_function
 import httplib2
 import os
 
+from Adafruit_Thermal import *
+
 import base64
 import email
 from apiclient import errors
@@ -13,11 +15,15 @@ from oauth2client import tools
 
 from dateutil.parser import parse
 
+import Image, io
+
 try:
     import argparse
     flags = argparse.ArgumentParser(parents=[tools.argparser]).parse_args()
 except ImportError:
     flags = None
+
+printer = Adafruit_Thermal("/dev/ttyAMA0", 9600, timeout=5)
 
 # If modifying these scopes, delete your previously saved credentials
 # at ~/.credentials/gmail-python-quickstart.json
@@ -111,22 +117,73 @@ def parseMessage(m):
 	else:
 		em['date_pretty'] = ''
 	
-	for part in m['payload']['parts']:
-		if part['mimeType'] == 'text/plain':
-			e = part['body']['data']
-			d = base64.urlsafe_b64decode(e.encode('ASCII'))
-			em['body'] = email.message_from_string(d).as_string().strip()
+	#print(m['payload'])
+	if ('mimeType' in m['payload']) and (m['payload']['mimeType']=='text/plain'):
+		e = m['payload']['body']['data']
+	else:
+		for part in m['payload']['parts']:
+			if part['mimeType'] == 'text/plain':
+				e = part['body']['data']
+			if part['filename']:
+				if 'data' in part['body']:
+					print("got filename: "+part['filename'])
+					raw_data = part['body']['data']
+				else:
+					attachmentId = part['body']['attachmentId']
+					#print("got attachment: "+part['body']['attachmentId'])
+					a = service.users().messages().attachments().get(id=attachmentId,userId='me', messageId=m['id']).execute()		
+					raw_data = a['data']
+					#print(a)
+				file_data = base64.urlsafe_b64decode(raw_data.encode('UTF-8'))
+				f = open("attachments/"+part['filename'], 'w')
+				f.write(file_data)
+				f.close()
+				em['attachments'] = {}
+				em['attachments'][part['filename']] = file_data
+
+	d = base64.urlsafe_b64decode(e.encode('ASCII'))
+	em['body'] = email.message_from_string(d).as_string().strip()
 
 	#for key in email:
 	#	print(key + ' = ' + email[key]);
 
 	return em
 		
-def printEmail(email):
+def printEmailToScreen(email):
 	print('From: '+email['from_pretty'])
 	print('On: '+email['date_pretty'])
 	print('Subject: '+email['subject'])
 	print(email['body'])
+	if 'attachments' in email:
+		for a in email['attachments']:
+			data = email['attachments'][a];
+			i = Image.open(io.BytesIO(data))
+
+def printEmail(email):
+	print("printing email")
+	printer.print("From: ");
+	printer.boldOn();
+	printer.println(email['from_pretty'])
+	printer.boldOff();
+
+	printer.println(email['date_pretty']);
+
+	printer.print("Subject: ")
+	printer.boldOn();
+	printer.println(email['subject']);
+	printer.boldOff();
+
+	printer.print(email['body']);
+
+	print("printing attachments")
+	if 'attachments' in email:
+		for a in email['attachments']:
+			data = email['attachments'][a];
+			i = Image.open(io.BytesIO(data))
+			printer.printImage(i, True)
+
+	print("done with email")
+	printer.feed(4)
 
 def main():
 	global service
