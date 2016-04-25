@@ -180,11 +180,25 @@ def printEmail(email):
 		for a in email['attachments']:
 			data = email['attachments'][a];
 			i = Image.open(io.BytesIO(data))
-			printer.printImage(i, True)
+			fi = fixImage(i,100)
+			printer.printImage(fi, True)
 
 	print("done with email")
 	printer.feed(4)
 
+def fixImage(image, threshold):
+	igs = image.convert('L')
+	i = igs.load()
+	for x in range(0,image.size[0]):
+		for y in range(0,image.size[1]):
+			s = i[x,y]
+			if s > threshold:
+				i[x,y] = 255
+			else:
+				i[x,y] = 0
+	return igs
+	
+	
 def main():
 	global service
 	service = getService()
